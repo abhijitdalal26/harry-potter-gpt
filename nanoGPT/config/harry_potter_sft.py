@@ -1,6 +1,6 @@
 import time
 
-out_dir = 'out-harry-potter-sft'
+out_dir = 'out-harry-potter'
 eval_interval = 50
 eval_iters = 20
 wandb_log = False
