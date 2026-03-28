@@ -16,9 +16,10 @@ always_save_checkpoint = False
 # the number of examples per iter:
 # 1 batch_size * 32 grad_accum * 1024 tokens = 32,768 tokens/iter
 # harry potter has ~1.5M tokens, so 1 epoch ~= 45 iters
-batch_size = 1
-gradient_accumulation_steps = 32
-max_iters = 200  # ~4-5 epochs over the full dataset
+batch_size = 8
+gradient_accumulation_steps = 4
+max_iters = 250  # ~4-5 epochs over the full dataset
+dropout = 0.1   
 
 # finetune at constant LR
 learning_rate = 3e-5
