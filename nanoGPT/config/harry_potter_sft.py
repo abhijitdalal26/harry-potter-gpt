@@ -17,7 +17,7 @@ always_save_checkpoint = False
 # adjust these based on how many conversations you have
 batch_size = 4
 gradient_accumulation_steps = 8  # effective batch = 32
-max_iters = 400
+max_iters = 600
 
 # lower LR for SFT — don't blast away what was learned in pretraining
 learning_rate = 1e-5
