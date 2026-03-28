@@ -8,7 +8,7 @@ wandb_project = 'harry-potter'
 wandb_run_name = 'ft-' + str(time.time())
 
 dataset = 'harry_potter'
-init_from = 'gpt2'  # gpt2-xl will OOM on colab T4, use gpt2 (124M)
+init_from = 'gpt2'  # gpt2-xl will OOM on colab T4, use gpt2 (124M), 'scratch' or 'resume' or 'gpt2*'
 
 # only save checkpoints if the validation loss improves
 always_save_checkpoint = False
@@ -19,7 +19,7 @@ always_save_checkpoint = False
 batch_size = 8
 gradient_accumulation_steps = 4
 max_iters = 250  # ~4-5 epochs over the full dataset
-dropout = 0.1   
+dropout = 0.1       
 
 # finetune at constant LR
 learning_rate = 3e-5

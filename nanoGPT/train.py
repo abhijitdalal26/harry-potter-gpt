@@ -48,6 +48,7 @@ dataset = 'openwebtext'
 gradient_accumulation_steps = 5 * 8 # used to simulate larger batch sizes
 batch_size = 12 # if gradient_accumulation_steps > 1, this is the micro-batch size
 block_size = 1024
+sft_mode = False  # set to True in config for SFT
 # model
 n_layer = 12
 n_head = 12
@@ -114,18 +115,26 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 # poor man's data loader
 data_dir = os.path.join('data', dataset)
 def get_batch(split):
-    # We recreate np.memmap every batch to avoid a memory leak, as per
-    # https://stackoverflow.com/questions/45132940/numpy-memmap-memory-usage-want-to-iterate-once/61472122#61472122
-    if split == 'train':
-        data = np.memmap(os.path.join(data_dir, 'train.bin'), dtype=np.uint16, mode='r')
-    else:
-        data = np.memmap(os.path.join(data_dir, 'val.bin'), dtype=np.uint16, mode='r')
+    data = np.memmap(os.path.join(data_dir, f'{split}.bin'), dtype=np.uint16, mode='r')
+    
+    if sft_mode:
+        mask = np.memmap(os.path.join(data_dir, f'{split}_mask.bin'), dtype=np.int8, mode='r')
+
     ix = torch.randint(len(data) - block_size, (batch_size,))
+
     x = torch.stack([torch.from_numpy((data[i:i+block_size]).astype(np.int64)) for i in ix])
     y = torch.stack([torch.from_numpy((data[i+1:i+1+block_size]).astype(np.int64)) for i in ix])
+
+    if sft_mode:
+        # y is shifted +1 vs data, so slice mask with same +1 shift
+        loss_mask = torch.stack([
+            torch.from_numpy((mask[i+1:i+1+block_size]).astype(np.int64)) for i in ix
+        ])
+        y = y.masked_fill(loss_mask == 0, -1)  # -1 = ignore_index in model.py
+
     if device_type == 'cuda':
-        # pin arrays x,y, which allows us to move them to GPU asynchronously (non_blocking=True)
-        x, y = x.pin_memory().to(device, non_blocking=True), y.pin_memory().to(device, non_blocking=True)
+        x = x.pin_memory().to(device, non_blocking=True)
+        y = y.pin_memory().to(device, non_blocking=True)
     else:
         x, y = x.to(device), y.to(device)
     return x, y
@@ -334,3 +343,4 @@ while True:
 
 if ddp:
     destroy_process_group()
+   
