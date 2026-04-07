@@ -4,8 +4,8 @@ out_dir = 'out-harry-potter'
 eval_interval = 5
 eval_iters = 40
 wandb_log = False
-wandb_project = 'harry-potter'
-wandb_run_name = 'ft-' + str(time.time())
+wandb_project = 'harry-potter'          
+wandb_run_name = 'ft-' + str(time.time())                   
 
 dataset = 'harry_potter'
 init_from = 'gpt2'  # gpt2-xl will OOM on colab T4, use gpt2 (124M), 'scratch' or 'resume' or 'gpt2*'
