@@ -1,25 +1,55 @@
-# Python cache
+# ── Python ────────────────────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *$py.class
+*.egg-info/
+dist/
+build/
 
-# Virtual environment
+# ── Virtual environments ──────────────────────────────────────────────────────
 venv/
 env/
 ENV/
+.env
+Lib/
+Scripts/
+share/
 
-# IDE
+# ── IDE ───────────────────────────────────────────────────────────────────────
 .vscode/
 .idea/
 *.swp
 *.swo
 
-# Model checkpoints and data
+# ── Model weights (too large for git, use HuggingFace Hub instead) ────────────
 *.pt
 *.pth
 *.ckpt
-out/
-out-*/
+*.safetensors
+*.bin
 
-# Logs
+# ── nanoGPT output checkpoints ────────────────────────────────────────────────
+nanoGPT/out/
+nanoGPT/out-*/
+
+# ── HuggingFace model directories ────────────────────────────────────────────
+nanoGPT/harry-potter-hf/
+nanoGPT/harry-potter-hf-dpo/
+
+# ── Tokenized data binaries ───────────────────────────────────────────────────
+nanoGPT/data/**/*.bin
+nanoGPT/data/**/train/
+nanoGPT/data/**/val/
+
+# ── Temporary / debug files ───────────────────────────────────────────────────
+nanoGPT/debug_dpo.py
+nanoGPT/predict_output.txt
+nanoGPT/create_dpo_prompt.py
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
 *.log
+wandb/
+runs/
+
+# ── Jupyter ───────────────────────────────────────────────────────────────────
+.ipynb_checkpoints/
