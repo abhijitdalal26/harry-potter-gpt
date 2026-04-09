@@ -26,7 +26,6 @@ share/
 *.pth
 *.ckpt
 *.safetensors
-*.bin
 
 # ── nanoGPT output checkpoints ────────────────────────────────────────────────
 nanoGPT/out/
@@ -36,10 +35,9 @@ nanoGPT/out-*/
 nanoGPT/harry-potter-hf/
 nanoGPT/harry-potter-hf-dpo/
 
-# ── Tokenized data binaries ───────────────────────────────────────────────────
-nanoGPT/data/**/*.bin
-nanoGPT/data/**/train/
-nanoGPT/data/**/val/
+# ── Large model checkpoint files (keep .bin whitelisted for training data) ────
+nanoGPT/out-*/*.bin
+nanoGPT/out-*/
 
 # ── Temporary / debug files ───────────────────────────────────────────────────
 nanoGPT/debug_dpo.py
