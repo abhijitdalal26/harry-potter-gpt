@@ -1,7 +1,7 @@
 import re
 import os
 
-# Directory containing all 7 books
+# Takes all 7 books and combines them into one file i.e. harry_potter.txt
 books_dir = 'hp_books'
 
 # Output file
