@@ -1,62 +1,60 @@
 # Harry Potter GPT
 
-A GPT-2 (124M) model fine-tuned to chat like a Harry Potter fan, trained through a full NLP pipeline: **Pretrain -> SFT -> DPO (RLHF)**.
+A GPT-2 (124M) model fine-tuned to chat like a Harry Potter fan, trained through a full NLP pipeline: **Pretrain → SFT → DPO (RLHF)**. Built from nanoGPT to understand each stage of a modern LLM training pipeline hands-on, rather than just calling an API.
 
 ---
 
 ## Training Pipeline
 
-### Stage 1 - Continued Pretraining
+### Stage 1 — Continued Pretraining
 Fine-tuned base GPT-2 on Harry Potter books to learn domain language.
 - Data: HP book text (~5M tokens)
 - Hardware: Kaggle T4 x 2
-- Output: out-harry-potter/ckpt.pt
+- Output: `out-harry-potter/ckpt.pt`
 
-### Stage 2 - Supervised Fine-Tuning (SFT)
+### Stage 2 — Supervised Fine-Tuning (SFT)
 Taught the model to follow a fan-discussion conversational format.
-- Data: hp_sft_data.txt (4,321 lines, ~540KB)
-- Format: <|user|> question\n<|assistant|> answer<|endoftext|>
+- Data: `hp_sft_data.txt` (4,321 lines, ~540KB)
+- Format: `<|user|> question\n<|assistant|> answer<|endoftext|>`
 - Loss masking: only compute loss on assistant tokens
 - 600 iterations on Kaggle T4 x 2 (~47 min)
 - Final loss: 1.97 train / 2.33 val
 
-### Stage 3 - HuggingFace Conversion
-Converted nanoGPT checkpoint to HuggingFace format for TRL compatibility.
-- Input: out-harry-potter/ckpt.pt (1.49 GB)
-- Output: harry-potter-hf/ (474 MB safetensors)
-- Key: Weight transposition (nanoGPT nn.Linear vs HF Conv1D)
+### Stage 3 — HuggingFace Conversion
+Converted the nanoGPT checkpoint to HuggingFace format for TRL compatibility.
+- Input: `out-harry-potter/ckpt.pt` (1.49 GB)
+- Output: `harry-potter-hf/` (474 MB safetensors)
+- Key detail: weight transposition (nanoGPT `nn.Linear` vs HF `Conv1D`)
 
-### Stage 4 - DPO (Direct Preference Optimization)
+### Stage 4 — DPO (Direct Preference Optimization)
 Aligned the model to prefer high-quality fan-style responses over generic ones.
 - Data: 347 preference pairs (prompt / chosen / rejected)
-- Library: TRL DPOTrainer
+- Library: TRL `DPOTrainer`
 - 3 epochs, 60 total steps (~1 min on RTX 3050 6GB)
-- Output: harry-potter-hf-dpo/
+- Output: `harry-potter-hf-dpo/`
 
 ---
 
 ## Quick Start
 
-### Run inference (compare SFT vs DPO)
-`ash
+**Run inference (compare SFT vs DPO)**
+```bash
 conda activate rl_env
 python nanoGPT/predict_dpo.py
-`
+```
 
-### Generate DPO data
-Use the prompt in 
-anoGPT/dpo_data_prompt.md with ChatGPT or Claude.
-Save output as 
-anoGPT/data/harry_potter_dpo/dpo_data.json, then:
-`ash
+**Generate DPO data**
+
+Use the prompt in `nanoGPT/dpo_data_prompt.md` with ChatGPT or Claude. Save the output as `nanoGPT/data/harry_potter_dpo/dpo_data.json`, then:
+```bash
 python nanoGPT/data/harry_potter_dpo/prepare_dpo.py
-`
+```
 
-### Run DPO training
-`ash
+**Run DPO training**
+```bash
 conda activate rl_env
 python nanoGPT/train_dpo.py
-`
+```
 
 ---
 
@@ -76,26 +74,22 @@ python nanoGPT/train_dpo.py
 
 ## Requirements
 
-- Python 3.10-3.13
-- 	orch with CUDA
-- 	ransformers, 	rl, datasets, ccelerate
+- Python 3.10–3.13
+- `torch` with CUDA
+- `transformers`, `trl`, `datasets`, `accelerate`
 
 Install:
-`ash
+```bash
 pip install torch --index-url https://download.pytorch.org/whl/cu124
 pip install transformers trl datasets accelerate
-`
+```
 
 ---
 
-## Files NOT in Git
+## Files not in Git
 
-Model weights are large (400-500MB each) and excluded from git:
-- 
-anoGPT/harry-potter-hf/ - SFT model
-- 
-anoGPT/harry-potter-hf-dpo/ - DPO model
-- 
-anoGPT/out-harry-potter/ - nanoGPT checkpoints
-- 
-anoGPT/data/harry_potter/*.bin - tokenized binary data
+Model weights are large (400–500MB each) and excluded from git:
+- `nanoGPT/harry-potter-hf/` — SFT model
+- `nanoGPT/harry-potter-hf-dpo/` — DPO model
+- `nanoGPT/out-harry-potter/` — nanoGPT checkpoints
+- `nanoGPT/data/harry_potter/*.bin` — tokenized binary data
