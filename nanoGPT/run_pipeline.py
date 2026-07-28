@@ -5,35 +5,45 @@ Meant to be run from inside the nanoGPT/ directory (relative paths assume that c
 typically on a Colab GPU runtime with Google Drive mounted for durable backups.
 
 Each stage:
-  1. Checks Drive for an existing backup zip of that stage's output.
-     - If present and large enough to plausibly be complete, restores it and skips training.
-     - If present but suspiciously small, treats it as bad and retrains.
-     - If the zip fails to extract (corrupted), treats it as bad and retrains.
+  1. Checks Drive for an existing backup of that stage's output, verified two ways:
+     - a sha256 checksum (written into a manifest alongside the zip at backup time)
+       catches corruption/truncation -- a zip that changed since it was written.
+     - for nanoGPT checkpoints, the `iter_num` stored inside ckpt.pt itself is checked
+       against the config's expected iteration count -- a checksum-valid checkpoint
+       can still be a valid file that just wasn't trained far enough (this is what
+       actually happened: Stage 1 was silently retrained from scratch and produced a
+       structurally fine but undertrained checkpoint). File size never told us that;
+       reading the checkpoint's own training metadata does.
+     If both checks pass, the backup is restored and that stage is skipped.
   2. Otherwise runs the stage fresh, entirely on local disk (never trains directly onto
      a Drive-mounted path -- Drive's FUSE mount chokes on frequent large writes).
-  3. Zips the result and copies the single zip to Drive as a backup.
+  3. Zips the result, writes a manifest (checksum + training metadata), and copies both
+     to Drive as the backup.
 
 This means the pipeline is safe to interrupt and re-run from scratch at any point --
-completed stages are auto-skipped, and only a genuinely half-finished stage gets redone.
+completed stages are auto-skipped, and only a genuinely half-finished or undertrained
+stage gets redone.
 
 Usage:
     python run_pipeline.py --drive-backup /content/drive/MyDrive/harry-potter-gpt --stage all
     python run_pipeline.py --drive-backup /content/drive/MyDrive/harry-potter-gpt --stage dpo
 """
 import argparse
+import hashlib
+import json
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
-# rough minimum zip sizes for a genuinely complete checkpoint. nanoGPT checkpoints include
-# optimizer state (~1.3-1.5GB zipped); HF exports are weights-only (~450-500MB zipped).
-# anything well under this almost certainly means an interrupted/wrong run got zipped by mistake.
-MIN_ZIP_SIZE = {
-    "out-harry-potter": 800_000_000,
-    "out-harry-potter-sft": 800_000_000,
-    "harry-potter-hf": 300_000_000,
-    "harry-potter-hf-dpo": 300_000_000,
+import torch
+
+# nanoGPT checkpoints store their own iter_num. Compare against each config's max_iters
+# (with slack for early-stopping via always_save_checkpoint) to catch a checkpoint that's
+# structurally valid but wasn't actually trained to completion.
+EXPECTED_MIN_ITERS = {
+    "out-harry-potter": 200,      # config/finetune_harry_potter.py: max_iters = 250
+    "out-harry-potter-sft": 500,  # config/harry_potter_sft.py: max_iters = 600
 }
 
 
@@ -42,46 +52,83 @@ def run(cmd: list[str]) -> None:
     subprocess.run(cmd, check=True)
 
 
+def sha256_file(path: Path) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def read_nanogpt_iter_num(local_dir: Path) -> int | None:
+    ckpt_file = local_dir / "ckpt.pt"
+    if not ckpt_file.exists():
+        return None
+    ckpt = torch.load(ckpt_file, map_location="cpu")
+    return ckpt.get("iter_num")
+
+
 def restore_from_drive(name: str, drive_backup: Path) -> bool:
-    """Try to restore `name/` from `drive_backup/{name}.zip`. Returns True if restored."""
+    """Try to restore `name/` from `drive_backup/{name}.zip`, verified against its manifest."""
     local_dir = Path(name)
     if local_dir.is_dir():
         print(f"[{name}] already present locally, skipping restore check")
         return True
 
     zip_path = drive_backup / f"{name}.zip"
+    manifest_path = drive_backup / f"{name}.manifest.json"
     if not zip_path.exists():
         print(f"[{name}] no backup in Drive yet")
         return False
-
-    zip_size = zip_path.stat().st_size
-    min_size = MIN_ZIP_SIZE[name]
-    if zip_size < min_size:
-        print(
-            f"[{name}] WARNING: backup zip is only {zip_size / 1e6:.0f}MB "
-            f"(expected {min_size / 1e6:.0f}MB+) -- looks incomplete, not restoring"
-        )
+    if not manifest_path.exists():
+        print(f"[{name}] WARNING: backup zip exists but has no manifest (older run, or written by hand) "
+              f"-- can't verify it, not restoring")
         return False
 
-    print(f"[{name}] found valid-sized backup ({zip_size / 1e6:.0f}MB), restoring...")
+    manifest = json.loads(manifest_path.read_text())
+    actual_sha256 = sha256_file(zip_path)
+    if actual_sha256 != manifest.get("sha256"):
+        print(f"[{name}] WARNING: checksum mismatch against manifest (backup is corrupted or was overwritten "
+              f"since being verified) -- not restoring")
+        return False
+
     result = subprocess.run(["unzip", "-oq", str(zip_path), "-d", "."])
     if result.returncode != 0:
-        print(f"[{name}] WARNING: unzip failed (exit {result.returncode}) -- backup is corrupted, not restoring")
+        print(f"[{name}] WARNING: unzip failed (exit {result.returncode}) despite matching checksum -- not restoring")
         shutil.rmtree(local_dir, ignore_errors=True)
         return False
 
-    print(f"[{name}] restored from Drive")
+    if name in EXPECTED_MIN_ITERS:
+        min_iters = EXPECTED_MIN_ITERS[name]
+        iter_num = manifest.get("iter_num")
+        if iter_num is None or iter_num < min_iters:
+            print(f"[{name}] WARNING: checkpoint only reached iter_num={iter_num} "
+                  f"(expected >= {min_iters}) -- undertrained, not using it")
+            shutil.rmtree(local_dir, ignore_errors=True)
+            return False
+        print(f"[{name}] restored and verified (checksum OK, iter_num={iter_num})")
+    else:
+        print(f"[{name}] restored and verified (checksum OK)")
+
     return True
 
 
 def backup_to_drive(name: str, drive_backup: Path) -> None:
     zip_path = Path(f"/tmp/{name}.zip") if sys.platform != "win32" else Path(f"{name}.zip")
     run(["zip", "-rq", str(zip_path), name])
+
+    manifest = {"name": name, "sha256": sha256_file(zip_path), "size": zip_path.stat().st_size}
+    if name in EXPECTED_MIN_ITERS:
+        manifest["iter_num"] = read_nanogpt_iter_num(Path(name))
+
     drive_backup.mkdir(parents=True, exist_ok=True)
-    dest = drive_backup / f"{name}.zip"
-    shutil.copy(zip_path, dest)
-    size_mb = dest.stat().st_size / 1e6
-    print(f"[{name}] backed up to {dest} ({size_mb:.0f}MB)")
+    dest_zip = drive_backup / f"{name}.zip"
+    dest_manifest = drive_backup / f"{name}.manifest.json"
+    shutil.copy(zip_path, dest_zip)
+    dest_manifest.write_text(json.dumps(manifest, indent=2))
+
+    detail = f", iter_num={manifest['iter_num']}" if "iter_num" in manifest else ""
+    print(f"[{name}] backed up to {dest_zip} ({manifest['size'] / 1e6:.0f}MB{detail})")
 
 
 def stage_pretrain(drive_backup: Path) -> None:
