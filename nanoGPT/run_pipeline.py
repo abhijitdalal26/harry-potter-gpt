@@ -52,6 +52,16 @@ def run(cmd: list[str]) -> None:
     subprocess.run(cmd, check=True)
 
 
+def run_train(config: str, extra_args: list[str]) -> None:
+    """Runs nanoGPT's train.py, using torchrun for DDP across all visible GPUs when there's
+    more than one (e.g. Kaggle's T4 x2) instead of silently training on just GPU 0."""
+    n_gpus = torch.cuda.device_count()
+    if n_gpus > 1:
+        run(["torchrun", "--standalone", f"--nproc_per_node={n_gpus}", "train.py", config, *extra_args])
+    else:
+        run(["python", "train.py", config, *extra_args])
+
+
 def sha256_file(path: Path) -> str:
     h = hashlib.sha256()
     with open(path, "rb") as f:
@@ -155,7 +165,7 @@ def stage_pretrain(drive_backup: Path) -> None:
         return
     if not Path("data/harry_potter/train.bin").exists():
         run(["python", "data/harry_potter/prepare.py"])
-    run(["python", "train.py", "config/finetune_harry_potter.py", "--compile=False"])
+    run_train("config/finetune_harry_potter.py", ["--compile=False"])
     run(["python", "sample.py", "--out_dir=out-harry-potter", "--start=Harry Potter",
          "--num_samples=3", "--max_new_tokens=200"])
     backup_to_drive("out-harry-potter", drive_backup)
@@ -171,8 +181,7 @@ def stage_sft(drive_backup: Path) -> None:
         shutil.copytree("out-harry-potter", "out-harry-potter-sft")
     if not Path("data/harry_potter_sft/train.bin").exists():
         run(["python", "data/harry_potter_sft/prepare_sft.py"])
-    run(["python", "train.py", "config/harry_potter_sft.py",
-         "--out_dir=out-harry-potter-sft", "--compile=False"])
+    run_train("config/harry_potter_sft.py", ["--out_dir=out-harry-potter-sft", "--compile=False"])
     sft_sample_prompt = "<|user|> Who is Harry Potter?\n<|assistant|>"
     run(["python", "sample.py", "--out_dir=out-harry-potter-sft",
          f"--start={sft_sample_prompt}", "--num_samples=3", "--max_new_tokens=200"])
