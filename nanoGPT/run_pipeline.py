@@ -68,12 +68,30 @@ def read_nanogpt_iter_num(local_dir: Path) -> int | None:
     return ckpt.get("iter_num")
 
 
+def local_checkpoint_is_valid(name: str) -> bool:
+    """A local dir existing isn't proof it's complete -- e.g. an interrupted training run
+    leaves a partial (or missing) checkpoint behind. For nanoGPT stages, check iter_num same
+    as we would for a Drive restore; for everything else, just check it looks non-empty."""
+    local_dir = Path(name)
+    if name in EXPECTED_MIN_ITERS:
+        iter_num = read_nanogpt_iter_num(local_dir)
+        if iter_num is None or iter_num < EXPECTED_MIN_ITERS[name]:
+            print(f"[{name}] local copy is incomplete (iter_num={iter_num}, expected >= {EXPECTED_MIN_ITERS[name]}) "
+                  f"-- likely from an interrupted run, discarding it")
+            return False
+        return True
+    return any(local_dir.iterdir())
+
+
 def restore_from_drive(name: str, drive_backup: Path) -> bool:
     """Try to restore `name/` from `drive_backup/{name}.zip`, verified against its manifest."""
     local_dir = Path(name)
     if local_dir.is_dir():
-        print(f"[{name}] already present locally, skipping restore check")
-        return True
+        if local_checkpoint_is_valid(name):
+            print(f"[{name}] already present locally and verified, skipping restore check")
+            return True
+        shutil.rmtree(local_dir, ignore_errors=True)
+        # fall through to try restoring from Drive instead
 
     zip_path = drive_backup / f"{name}.zip"
     manifest_path = drive_backup / f"{name}.manifest.json"
