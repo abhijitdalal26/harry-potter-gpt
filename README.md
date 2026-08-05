@@ -1,5 +1,7 @@
 # Harry Potter GPT
 
+Project write-up: [abhijitdalal.vercel.app/projects/harry-potter-gpt](https://abhijitdalal.vercel.app/projects/harry-potter-gpt)
+
 A GPT-2 (124M) model fine-tuned to chat like a Harry Potter fan, trained through a full NLP pipeline: **Pretrain → SFT → DPO (RLHF)**. Built from nanoGPT to understand each stage of a modern LLM training pipeline hands-on, rather than just calling an API.
 
 ---
@@ -35,7 +37,22 @@ Aligned the model to prefer high-quality fan-style responses over generic ones.
 
 ---
 
+## Pretrained Models
+
+All three stages are published on Hugging Face Hub:
+- [abhijit26/harry-potter-gpt-base](https://huggingface.co/abhijit26/harry-potter-gpt-base) — continued-pretraining stage
+- [abhijit26/harry-potter-gpt-sft](https://huggingface.co/abhijit26/harry-potter-gpt-sft) — supervised fine-tuned stage
+- [abhijit26/harry-potter-gpt-dpo](https://huggingface.co/abhijit26/harry-potter-gpt-dpo) — DPO-aligned final stage
+
+`nanoGPT/kaggle_push_to_hf.ipynb` re-runs the checkpoint-to-HF conversion and upload from inside Kaggle's datacenter network (uploading the large model files from a home connection was the original bottleneck).
+
+---
+
 ## Quick Start
+
+**Run the full pipeline end-to-end (Colab/Kaggle)**
+
+`nanoGPT/colab_pipeline.ipynb` and `nanoGPT/kaggle_pipeline.ipynb` re-run pretrain → SFT → DPO on a fresh GPU instance, with Google Drive checkpoint backup/restore (checksum-validated, resumable if a stage already completed) and `torchrun` DDP across all visible GPUs.
 
 **Run inference (compare SFT vs DPO)**
 ```bash
