@@ -10,7 +10,7 @@ A GPT-2 (124M) model fine-tuned to chat like a Harry Potter fan, trained through
 
 ### Stage 1 — Continued Pretraining
 Fine-tuned base GPT-2 on Harry Potter books to learn domain language.
-- Data: HP book text (~5M tokens)
+- Data: HP book text, all 7 books (~2M tokens)
 - Hardware: Kaggle T4 x 2
 - Output: `out-harry-potter/ckpt.pt`
 
